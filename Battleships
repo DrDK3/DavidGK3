@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Battleship Quiz Game</title>
+<style>
+  body {
+    background-color: #1a1a1a;
+    color: #e6e6e6;
+    font-family: 'Courier New', Courier, monospace;
+    text-align: center;
+  }
+  #dashboard {
+    display: flex;
+    justify-content: space-around;
+    padding: 20px;
+  }
+  #question-area, #grid-area, #feedback-area {
+    width: 30%;
+  }
+  #grid {
+    display: grid;
+    grid-template-columns: repeat(6, 40px);
+    grid-template-rows: repeat(6, 40px);
+    margin: 0 auto;
+  }
+  .cell {
+    width: 40px;
+    height: 40px;
+    border: 1px solid #555;
+    background-color: #2e2e2e;
+    cursor: pointer;
+  }
+  .cell.hit {
+    background-color: red;
+  }
+  .cell.miss {
+    background-color: #555;
+  }
+  .cell.sunk {
+    background-color: orange;
+  }
+  #question-area {
+    background-color: #262626;
+    padding: 10px;
+    border-radius: 5px;
+  }
+  #question {
+    margin-bottom: 10px;
+  }
+  #feedback-area {
+    background-color: #262626;
+    padding: 10px;
+    border-radius: 5px;
+  }
+  #feedback {
+    margin-bottom: 10px;
+  }
+  button {
+    padding: 10px 20px;
+    font-size: 16px;
+    background-color: #333;
+    color: #e6e6e6;
+    border: none;
+    cursor: pointer;
+  }
+  button:hover {
+    background-color: #444;
+  }
+  input[type="text"] {
+    padding: 5px;
+    font-size: 16px;
+    width: 80%;
+  }
+</style>
+</head>
+<body>
+
+<h1>Battleship Quiz Game</h1>
+
+<div id="dashboard">
+  <div id="question-area">
+    <h2>Question</h2>
+    <div id="question"></div>
+    <input type="text" id="answer" placeholder="Your answer">
+    <br><br>
+    <button onclick="submitAnswer()">Submit Answer</button>
+  </div>
+  <div id="grid-area">
+    <h2>Enemy Waters</h2>
+    <div id="grid"></div>
+  </div>
+  <div id="feedback-area">
+    <h2>Feedback</h2>
+    <div id="feedback"></div>
+    <div id="salvo-instructions"></div>
+  </div>
+</div>
+
+<script>
+// Game Variables
+let gridSize = 6;
+let shipLengths = [3, 3];
+let grid = [];
+let ships = [];
+let questions = [
+  { question: "What is the capital of France?", answer: "paris" },
+  { question: "2 + 2 equals?", answer: "4" },
+  { question: "What color is the sky on a clear day?", answer: "blue" },
+  { question: "What is H2O commonly known as?", answer: "water" },
+  { question: "What is the largest planet in our solar system?", answer: "jupiter" },
+  { question: "How many continents are there on Earth?", answer: "7" },
+];
+let currentQuestionIndex = 0;
+let shotsLeft = 0;
+let totalShotsPerSalvo = 5;
+let gameOver = false;
+
+// Initialize Grid
+function initializeGrid() {
+  grid = [];
+  for (let i = 0; i < gridSize; i++) {
+    grid[i] = [];
+    for (let j = 0; j < gridSize; j++) {
+      grid[i][j] = { hasShip: false, hit: false, element: null };
+    }
+  }
+}
+
+// Place Ships Randomly
+function placeShips() {
+  ships = [];
+  shipLengths.forEach((length) => {
+    let placed = false;
+    while (!placed) {
+      let orientation = Math.random() < 0.5 ? 'H' : 'V';
+      let row = Math.floor(Math.random() * gridSize);
+      let col = Math.floor(Math.random() * gridSize);
+      let shipCells = [];
+
+      if (orientation === 'H' && col + length <= gridSize) {
+        for (let i = 0; i < length; i++) {
+          if (grid[row][col + i].hasShip) break;
+          shipCells.push({ row: row, col: col + i });
+        }
+      } else if (orientation === 'V' && row + length <= gridSize) {
+        for (let i = 0; i < length; i++) {
+          if (grid[row + i][col].hasShip) break;
+          shipCells.push({ row: row + i, col: col });
+        }
+      }
+
+      if (shipCells.length === length) {
+        shipCells.forEach((cell) => {
+          grid[cell.row][cell.col].hasShip = true;
+        });
+        ships.push({ cells: shipCells, sunk: false });
+        placed = true;
+      }
+    }
+  });
+}
+
+// Create Grid UI
+function createGridUI() {
+  let gridElement = document.getElementById('grid');
+  gridElement.innerHTML = '';
+  for (let i = 0; i < gridSize; i++) {
+    for (let j = 0; j < gridSize; j++) {
+      let cellElement = document.createElement('div');
+      cellElement.className = 'cell';
+      cellElement.dataset.row = i;
+      cellElement.dataset.col = j;
+      cellElement.addEventListener('click', () => fireShot(i, j));
+      grid[i][j].element = cellElement;
+      gridElement.appendChild(cellElement);
+    }
+  }
+}
+
+// Display Current Question
+function displayQuestion() {
+  if (currentQuestionIndex < questions.length) {
+    document.getElementById('question').innerText = questions[currentQuestionIndex].question;
+    document.getElementById('answer').value = '';
+    document.getElementById('feedback').innerText = '';
+  } else {
+    document.getElementById('question-area').innerHTML = '<h2>All questions answered.</h2>';
+  }
+}
+
+// Submit Answer
+function submitAnswer() {
+  if (currentQuestionIndex >= questions.length) return;
+  let userAnswer = document.getElementById('answer').value.trim().toLowerCase();
+  let correctAnswer = questions[currentQuestionIndex].answer.toLowerCase();
+  if (userAnswer === correctAnswer) {
+    shotsLeft = totalShotsPerSalvo;
+    document.getElementById('feedback').innerText = 'Correct! You have ' + shotsLeft + ' shots.';
+    document.getElementById('salvo-instructions').innerText = 'Click on the grid to fire your shots.';
+  } else {
+    document.getElementById('feedback').innerText = 'Incorrect. No shots awarded.';
+    currentQuestionIndex++;
+    displayQuestion();
+  }
+}
+
+// Fire Shot
+function fireShot(row, col) {
+  if (shotsLeft <= 0 || gameOver) return;
+  let cell = grid[row][col];
+  if (cell.hit) {
+    document.getElementById('feedback').innerText = 'You already fired at this location.';
+    return;
+  }
+  cell.hit = true;
+  shotsLeft--;
+  if (cell.hasShip) {
+    cell.element.classList.add('hit');
+    document.getElementById('feedback').innerText = 'Hit!';
+    checkForSunkShip(row, col);
+  } else {
+    cell.element.classList.add('miss');
+    document.getElementById('feedback').innerText = 'Miss.';
+  }
+  if (shotsLeft === 0) {
+    currentQuestionIndex++;
+    displayQuestion();
+    document.getElementById('salvo-instructions').innerText = '';
+  }
+  checkForWin();
+}
+
+// Check if a Ship is Sunk
+function checkForSunkShip(row, col) {
+  ships.forEach((ship) => {
+    if (ship.sunk) return;
+    let allHit = true;
+    ship.cells.forEach((cell) => {
+      if (!grid[cell.row][cell.col].hit) {
+        allHit = false;
+      }
+    });
+    if (allHit) {
+      ship.sunk = true;
+      ship.cells.forEach((cell) => {
+        grid[cell.row][cell.col].element.classList.add('sunk');
+      });
+      document.getElementById('feedback').innerText += ' You sunk a ship!';
+    }
+  });
+}
+
+// Check for Win Condition
+function checkForWin() {
+  let allSunk = ships.every((ship) => ship.sunk);
+  if (allSunk) {
+    gameOver = true;
+    document.getElementById('feedback').innerText = 'Congratulations! You have sunk all enemy ships.';
+    document.getElementById('salvo-instructions').innerText = '';
+    document.getElementById('question-area').innerHTML = '';
+  } else if (currentQuestionIndex >= questions.length && shotsLeft === 0) {
+    gameOver = true;
+    document.getElementById('feedback').innerText = 'Game Over. You have no more shots.';
+    document.getElementById('salvo-instructions').innerText = '';
+    document.getElementById('question-area').innerHTML = '';
+  }
+}
+
+// Initialize Game
+function initGame() {
+  initializeGrid();
+  placeShips();
+  createGridUI();
+  displayQuestion();
+}
+
+initGame();
+</script>
+
+</body>
+</html>
